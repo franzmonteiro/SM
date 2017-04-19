@@ -9,7 +9,8 @@ import json
 
 #TODO: Check if incidents exist.
 def get_incident_details(incident_id):
-    url = 'http://qa.user.app-server.sm.intranet:13500/SM/9/rest/incidents?IncidentID={0}&view=expand'.format(incident_id)
+    url = 'http://qa.user.app-server.sm.intranet:13500/SM/9/rest/incidents?IncidentID={0}&view=expand'
+          .format(incident_id)
     response = requests.get(url, auth=('svcacc_ws_ps_int', 'mudar$123')) #TODO: Include timeout.
     return json.loads(response.text)['content'][0]['Incident']
     
@@ -51,10 +52,11 @@ def update_incident_status(incident_id, new_status):
                             'update.action': incident_id
                         }
                       }
-    try:
-        maximum_attempts = 3
-        attempts = 0
-        while attempts < maximum_attempts:
+    maximum_attempts = 3
+    attempts = 0
+    error_messages = []
+    while attempts < maximum_attempts:
+        try:
             response = requests.post(url,
                                  auth=('svcacc_ws_ps_int', 'mudar$123'),
                                  json=incident_update)
@@ -62,14 +64,15 @@ def update_incident_status(incident_id, new_status):
             #print 'HTTP status code: {0}.'.format(response.status_code)
             if response.status_code == 200:
                 return True
-            
             attempts += 1
-    except ReadTimeout:
-        print 'Request timed out.'
-    except Exception:
-        print 'Unknown error while updating {0} status.'
-              .format(incident_id)
-    return False # TODO: This value is not being used. 
+        except ReadTimeout:
+            error_messages.append('Request timed out.')
+        except Exception:
+            error_messages.append('Unknown error while updating {0} status.'
+                                  .format(incident_id))
+        print error_messages[len(error_messages) - 1]
+        
+    return { incident_id: error_messages }
 
 def associate_incidents(source_incident_id, dependent_incident_id):
     url = 'http://qa.user.app-server.sm.intranet:13500/SM/9/rest/screlations'
@@ -83,7 +86,7 @@ def associate_incidents(source_incident_id, dependent_incident_id):
                       }
     maximum_attempts = 3
     attempts = 0
-    attempts_messages = []
+    error_messages = []
     while attempts < maximum_attempts:
         try:
             response = requests.post(url,
@@ -94,20 +97,15 @@ def associate_incidents(source_incident_id, dependent_incident_id):
             #print 'HTTP status code: {0}.'.format(response.status_code)
             #print 'Message: {0}\n'.format(response.text)
             if response.status_code == 200:
-                return True
-            
+                return { dependent_incident_id: True }
             attempts += 1
-            message = None
         except ReadTimeout:
-            message = 'Request timed out.'
+            error_messages.append('Request timed out.')
         except Exception:
-            message = 'Unknown error while associating {0} with {1}.'
-                      .format(dependent_incident_id, source_incident_id)
-        
-        if message is not None:
-            print message
-            attempts_messages.append(message)
-        return False #
+            error_messages.append('Unknown error while associating {0} with {1}.'
+                                  .format(dependent_incident_id, source_incident_id))
+        print error_messages[len(error_messages) - 1]
+    return { dependent_incident_id: error_messages }
 
 def associate_incident_set_to_source(source_incident_id, dependent_incidents_ids):
     successful_associations = []
@@ -117,13 +115,15 @@ def associate_incident_set_to_source(source_incident_id, dependent_incidents_ids
     for dependent_incident_id in dependent_incidents_ids:
         response = is_association_allowed(get_incident_details(source_incident_id),
                                           get_incident_details(dependent_incident_id))
-        if response['dependent_incident_id'] is True:
-            if associate_incidents(source_incident_id, dependent_incident_id):
-                successful_associations.append(dependent_incident_id)
-                update_incident_status(dependent_incident_id, pending_status)
-                continue
-        
-        skipped_associations.append(response)
+        if response[dependent_incident_id] is not True:
+            skipped_associations.append(successful_association)
+            continue
+            
+        response = associate_incidents(source_incident_id,
+                                       dependent_incident_id):
+        if response[dependent_incident_id] is True:
+            successful_associations.append(dependent_incident_id)
+            update_incident_status(dependent_incident_id, pending_status)
         
     return {
              'successful_associations': successful_associations,
@@ -131,17 +131,17 @@ def associate_incident_set_to_source(source_incident_id, dependent_incidents_ids
            }
 
 def print_association_statistics(successful_associations, skipped_associations):
-    print '\n======= Association Statistics =======\n'
+    print '{0}{1} {2} {1}{0}'.format('\n', '=' * 7, 'Association Statistics')
     print '> Total successful associations: {0}.'.format(len(successful_associations))
     print '> Total skipped associations: {0}.'.format(len(skipped_associations))
     
     print '> Skipped associations:'
     for skipped_association in skipped_associations:
         for dependent_incident_id, reasons in skipped_association.items():
-            print '\n\t{0}'.format(dependent_incident_id)
-            print '\tMotivo: {0}\n'.format('\n\t\t'.join(reasons))
+            print '\n\tIncident: {0}'.format(dependent_incident_id)
+            print '\tReasons {0}\n'.format('\n\t\t'.join(reasons))
     
-    print '\n> Successful associations:\n'
+    print '> Successful associations:\n'
     for successful_association in successful_associations:
         print '\t{0}'.format(successful_association)
 
@@ -174,5 +174,4 @@ if __name__ == "__main__":
                                 
     print_association_statistics(association_statistics['successful_associations'],
                                  association_statistics['skipped_associations'])
-    
     sys.exit(0)
