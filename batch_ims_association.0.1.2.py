@@ -4,19 +4,37 @@ import sys, getopt
 import requests
 from requests.auth import HTTPBasicAuth
 import json
+import base64
 #import grequests # Asynchronous requests. Replace 'requests' module 
 #TODO: Replace synchronous requests by asynchonous requests
+#TODO: Use threads?
 
+rest_api_prefix = None
+user = None
+password = None
+
+def set_configurations():
+    configurations_file = '/home/lmonteiro/configurations.json'
+    with open(configurations_file) as f:
+        configurations = json.load(f)
+    global rest_api_prefix, user, password    
+    rest_api_prefix = configurations['rest_api_prefix']
+    user = configurations['authentication']['user']
+    password = base64
+               .b64decode(configurations['authentication']['password'])
+               .decode('ascii')
+    return configurations
+    
 #TODO: Check if incidents exist.
 def get_incident_details(incident_id):
-    url = 'http://qa.user.app-server.sm.intranet:13500/SM/9/rest/incidents?IncidentID={0}&view=expand'
-          .format(incident_id)
-    response = requests.get(url, auth=('svcacc_ws_ps_int', 'mudar$123')) #TODO: Include timeout.
+    url = '{0}/incidents?IncidentID={1}&view=expand'
+          .format(rest_api_prefix, incident_id)
+    response = requests.get(url, auth=(user, password)) #TODO: Include timeout.
     return json.loads(response.text)['content'][0]['Incident']
     
 def is_association_allowed(source_incident, dependent_incident):
     forbidden_services = ['swap', 'disk_usage'] # Dependent incidents with these services can not be associated.
-    dependent_incident_service = dependent_incident['BriefDescription'][1]
+    dependent_incident_service = dependent_incident['BriefDescription'][1] #TODO: Use split() ?
     is_allowed = True
     why_not = [] # Reasons why the association is not allowed.
     
@@ -43,11 +61,11 @@ def is_association_allowed(source_incident, dependent_incident):
     return { dependent_incident['IncidentID']: is_allowed if is_allowed else why_not }
     
 def update_incident_status(incident_id, new_status):
-    url = 'http://qa.user.app-server.sm.intranet:13500/SM/9/rest/incidents/{0}/action/update'
-          .format(incident_id)
+    url = '{0}/incidents/{1}/action/update'
+          .format(rest_api_prefix, incident_id)
           
     incident_update = { 'Incident': {
-                            'AssigneeName': 'svcacc_ws_ps_int',
+                            'AssigneeName': user,
                             'IMTicketStatus': new_status,
                             'update.action': incident_id
                         }
@@ -58,11 +76,11 @@ def update_incident_status(incident_id, new_status):
     while attempts < maximum_attempts:
         try:
             response = requests.post(url,
-                                 auth=('svcacc_ws_ps_int', 'mudar$123'),
+                                 auth=(user, password),
                                  json=incident_update)
             print 'Updating {0} status to {1}.'.format(incident_id, new_status)
             #print 'HTTP status code: {0}.'.format(response.status_code)
-            if response.status_code == 200:
+            if response.status_code == 200: #TODO: Check if status is unauthorized (401)
                 return True
             attempts += 1
         except ReadTimeout:
@@ -75,7 +93,7 @@ def update_incident_status(incident_id, new_status):
     return { incident_id: error_messages }
 
 def associate_incidents(source_incident_id, dependent_incident_id):
-    url = 'http://qa.user.app-server.sm.intranet:13500/SM/9/rest/screlations'
+    url = '{0}/screlations'.format(rest_api_prefix)
     
     new_association = { 'screlation': {
                             'Depend': dependent_incident_id,
@@ -90,7 +108,7 @@ def associate_incidents(source_incident_id, dependent_incident_id):
     while attempts < maximum_attempts:
         try:
             response = requests.post(url,
-                                     auth=('svcacc_ws_ps_int', 'mudar$123'),
+                                     auth=(user, password),
                                      json=new_association)
             print 'Associating incidents {0} and {1}.'
                   .format(dependent_incident_id, source_incident_id)
@@ -164,6 +182,8 @@ if __name__ == "__main__":
         elif opt in ['-v', '--verbose']:
             pass #TODO: implement it.
     
+    set_configurations()
+    dependent_incidents_ids = list(set((dependent_incidents_ids)) # remove repeated incidents
     #print 'Source incident: {0}'.format(source_incident)
     #print 'Dependent incidents: {0}'.format(', '.join(dependent_incidents))
     #sys.exit(0)
