@@ -229,5 +229,6 @@ if __name__ == "__main__":
                                 source_incident_id,
                                 dependent_incidents_ids)
     print_association_statistics(association_statistics['successful_associations'],
-                                 association_statistics['skipped_associations'])
+                                 association_statistics['skipped_associations'],
+                                 association_statistics['unsuccessful_updates'])
     sys.exit(0)
