@@ -1,0 +1,83 @@
+{
+  "@count": 1,
+  "@start": 1,
+  "@totalcount": 1,
+  "Messages": [],
+  "ResourceName": "Incident",
+  "ReturnCode": 0,
+  "content": [
+    {
+      "Incident": {
+        "AlternateContact": "Service Desk TP",
+        "AssigneeName": "rsantana",
+        "BriefDescription": "|| NOME: Elenilde Barbosa de Oliveira",
+        "Category": "sistema de gestao do negocio",
+        "ClosedBy": "rlopes",
+        "ClosedTime": "2012-09-04T06:58:00+00:00",
+        "ClosureCode": "Não foi possível confirmação com o usuário/cliente",
+        "Company": "uol inc.",
+        "ConfigurationItem": "pagseguro",
+        "Contact": "Willmann Silva Rocha",
+        "ContactFirstName": "Willmann",
+        "ContactLastName": "Silva Rocha",
+        "DowntimeStart": "2012-08-30T11:55:17+00:00",
+        "IMTicketStatus": "Closed",
+        "IncidentDescription": [
+          "|| NOME: Elenilde Barbosa de Oliveira",
+          "|| Operação: uol pag seguro",
+          "|| Campus: Higienópolis",
+          "Logados: 74",
+          "Impactados: 100",
+          "Usuária informa que o gerenciador pag seguro apresenta erro 500",
+          null,
+          "Reiniciamos o micro e efetuamos testes com vários usuários, porem o erro persistiu e segundo a supervisora os clientes estão reprtando que também não estão conseguindo visualizar esta pagina."
+        ],
+        "IncidentID": "IM1107711",
+        "JournalUpdates": [
+          "04/09/2012 03:57:59 Brazil/East (rlopes):",
+          "30/08/2012 09:06:37 Brazil/East (wrocha):",
+          "30/08/2012 09:05:17 Brazil/East (rsantana):",
+          "Prioridade alterada de P2 para P3 pelo usuário rsantana",
+          "30/08/2012 09:04:16 Brazil/East (rsantana):",
+          "Prioridade alterada de P2 para P3 pelo usuário rsantana"
+        ],
+        "Location": "UOL Faria Lima",
+        "OpenTime": "2012-08-30T11:55:18+00:00",
+        "OpenedBy": "wrocha",
+        "OperationalDevice": true,
+        "PrimaryAssignmentGroup": "pagseguro oper",
+        "ProblemType": "falha ao logar",
+        "ProductType": "gerenciador []",
+        "Resolution": [
+          "04/09/2012 03:58:00 (rlopes):",
+          "Encerrando conforme IT: https://itil.wiki.intranet/index.php/IM007-SD-EncerramentoIMs Incidente em resolved após 48 horas.",
+          "30/08/2012 09:06:37 (wrocha):",
+          "Encaminhado email para TP.",
+          "Devido impossibilidade de confirmação de solução com o cliente/usuário, incidente foi resolvido com envio de notificação por email, o qual instruirá sobre pedido de reabertura, caso falha ainda persista"
+        ],
+        "ResolutionCode": "Suspeita incidente",
+        "ResolutionFixType": "temporary",
+        "ResolutionGroup": "pagseguro oper",
+        "Severity": "3",
+        "SiteCategory": "A",
+        "Subcategory": "pagseguro",
+        "TicketOwner": "wrocha",
+        "UpdatedBy": "rlopes",
+        "UpdatedTime": "2012-09-04T06:58:00+00:00",
+        "cust.visible": false,
+        "resolved.time": "2012-08-30T12:05:17+00:00",
+        "status": "closed",
+        "sysmodtime": "2014-11-11T12:01:02+00:00",
+        "sysmoduser": "sc_itm_rneves",
+        "uol.cnpj": "01.109.184/0001-95",
+        "uol.customer": "UNIVERSO ONLINE S.A.",
+        "uol.impacto": "2",
+        "uol.item.descricao": "comercio eletronico: https://pagseguro.uol.com.br/",
+        "uol.pending.financial": false,
+        "uol.ura": "Nao",
+        "uol.urgencia": "2",
+        "uol.usuario.servicedesk": true
+      }
+    }
+  ]
+}
