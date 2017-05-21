@@ -3,6 +3,7 @@
 import sys, getopt
 import requests
 from requests.auth import HTTPBasicAuth
+import requests_mock
 import json
 import base64
 #import grequests # Asynchronous requests. Replace 'requests' module.
@@ -61,6 +62,8 @@ def make_http_request(url, content=None, http_method='GET', request_timeout=1):
             print 'Unauthorized request, check your credentials.'
         elif response.status_code == 404:
             print 'Something was not found.' #TODO: Improve this.
+        else: # Unknown status. Let us try once more.
+            continue
         break # New attempts will not be done.
         
     print 'Request aborted. {0} failed attempts.'.format(attempts)
@@ -68,7 +71,7 @@ def make_http_request(url, content=None, http_method='GET', request_timeout=1):
              'response': None } #TODO: Return something like the 'is_association_allowed()' method.
     
 def is_association_allowed(source_incident, dependent_incident):
-    forbidden_services = ['swap', 'disk_usage'] # Dependent incidents with these services can not be associated.
+    forbidden_services = ['swap', 'disk_usage'] # Dependent incidents with these services cannot be associated.
     dependent_incident_service = dependent_incident['BriefDescription'].split()[1] #TODO: Use split() ?
     is_allowed = True
     why_not = [] # Reasons why the association is not allowed.
@@ -85,12 +88,12 @@ def is_association_allowed(source_incident, dependent_incident):
     
     if dependent_incident['PrimaryAssignmentGroup'] == source_incident['PrimaryAssignmentGroup']:
         is_allowed = False
-        why_not.append('Dependent incident ({0}) and source incident ({1}) can not be on the same queue.'
+        why_not.append('Dependent incident ({0}) and source incident ({1}) cannot be on the same queue.'
                        .format(dependent_incident['IncidentID'], source_incident['IncidentID']))
     
     if dependent_incident['IncidentID'] == source_incident['IncidentID']:
         is_allowed = False
-        why_not.append('{0} can not be associated to itself.'
+        why_not.append('{0} cannot be associated to itself.'
                        .format(dependent_incident['IncidentID']))
     
     # This kind of return must be kept, because it was defined in our meeting.
@@ -135,39 +138,44 @@ def associate_incident_set_to_source(source_incident_id, dependent_incidents_ids
     skipped_associations = []
     unsuccessful_updates = []
     pending_status = 'Pending IM'
-    
-    for dependent_incident_id in dependent_incidents_ids:
-        source_incident = get_incident_details(source_incident_id)
-        if source_incident is None:
-            print 'Error while getting source incident ({0})'.format(source_incident_id)
-            skipped_associations = dependent_incidents_ids # All associations will be skipped.
-            break
+    reasons_why_skipped = []
+    source_incident = get_incident_details(source_incident_id)
+    if source_incident is None:
+        print 'Error while getting source incident ({0}).'.format(source_incident_id)
+        # All associations will be skipped.
+        reasons_why_skipped.append('Error while getting source incident ({0}) details.'.format(source_incident_id))
+        skipped_associations = [{ incident_id: reasons_why_skipped } for incident_id in dependent_incidents_ids]
+    else:
+        for dependent_incident_id in dependent_incidents_ids:
+            dependent_incident = get_incident_details(dependent_incident_id)
+            if dependent_incident is None:
+                reasons_why_skipped.append('Error while getting {0} details.'.format(dependent_incident_id))
+                skipped_associations.append({ dependent_incident_id: reasons_why_skipped })
+                continue
+                
+            response = is_association_allowed(source_incident,
+                                              dependent_incident)
+            if response[dependent_incident_id] is not True:
+                # Here, the response is already formatted properly.
+                skipped_associations.append(response)
+                continue
+                
+            response = associate_incidents(source_incident_id,
+                                           dependent_incident_id)
+            if response is False:
+                reasons_why_skipped.append('Error while getting {0} details.'.format(dependent_incident_id))
+                skipped_associations.append({ dependent_incident_id: reasons_why_skipped })
+                continue
+            successful_associations.append(dependent_incident_id)
             
-        dependent_incident = get_incident_details(dependent_incident_id)
-        if dependent_incident is None:
-            skipped_associations.append(dependent_incident)
-            continue
-            
-        response = is_association_allowed(source_incident,
-                                          dependent_incident)
-        if response[dependent_incident_id] is not True:
-            skipped_associations.append(response)
-            continue
-            
-        response = associate_incidents(source_incident_id,
-                                       dependent_incident_id)
-        if response is False:
-            skipped_associations.append(dependent_incident_id)
-            continue
-        successful_associations.append(dependent_incident_id)
-        
-        response = update_incident_status(dependent_incident_id, pending_status)
-        if response is not True:
-            error_message = ('{0} was associated with {1}, however it'
-                             ' was not possible to update its status to {2}.'
-                             .format(dependent_incident_id, source_incident_id, pending_status))
-            print error_message
-            unsuccessful_updates.append({ dependent_incident_id: error_message })
+            response = update_incident_status(dependent_incident_id, pending_status)
+            if response is not True:
+                error_message = ('{0} was associated with {1}, however it was not possible to update its status to {2}.'
+                                 .format(dependent_incident_id, source_incident_id, pending_status))
+                print error_message
+                unsuccessful_updates.append({ dependent_incident_id: error_message })
+            else:
+                print '{0}\'s status was successfully updated.'.format(dependent_incident_id)
         
     return {
              'successful_associations': successful_associations,
@@ -177,23 +185,25 @@ def associate_incident_set_to_source(source_incident_id, dependent_incidents_ids
 
 def print_association_statistics(successful_associations, skipped_associations, unsuccessful_updates):
     print '{0}{1} {2} {1}{0}'.format('\n', '=' * 7, 'Association Statistics')
-    print '> Total successful associations: {0}.'.format(len(successful_associations))
     print '> Total skipped associations: {0}.'.format(len(skipped_associations))
     print '> Total unsuccessful status updates: {0}.'.format(len(unsuccessful_updates))
+    print '> Total successful associations: {0}.'.format(len(successful_associations))
     
     print '> Skipped associations:'
     for skipped_association in skipped_associations:
         for dependent_incident_id, reasons in skipped_association.items():
             print '\n\tIncident: {0}'.format(dependent_incident_id)
-            print '\tReasons {0}\n'.format('\n\t\t'.join(reasons))
+            print '\tReasons: {0}\n'.format('\n\t\t'.join(reasons))
+    
+    print '> Unsuccessful updates:\n'
+    for unsuccessful_update in unsuccessful_updates:
+        for dependent_incident_id, reason in unsuccessful_update:
+            print '\n\tIncident: {0}'.format(dependent_incident_id)
+            print '\tReason: \n\t\t{0}\n'.format(reason)
     
     print '> Successful associations:\n'
     for successful_association in successful_associations:
         print '\t{0}'.format(successful_association)
-        
-    print '> Unsuccessful updates:\n'
-    for unsuccessful_update in unsuccessful_updates:
-        pass #TODO: Print data.
 
 #TODO: Implement it.
 def usage():
@@ -224,6 +234,15 @@ if __name__ == "__main__":
         print 'Execution aborted.'
         sys.exit(1)
         
+    #
+    with requests_mock.Mocker() as m:
+        incident_id = 'IM9876543'
+        url = '{0}/incidents?IncidentID={1}&view=expand'.format(rest_api_prefix, incident_id)
+        m.get(url, text="{ 'BriefDescription': 'server service data_center' }")
+        print requests.get(url).text
+    
+    sys.exit(0)
+    
     dependent_incidents_ids = list(set(dependent_incidents_ids)) # remove repeated incidents
     association_statistics = associate_incident_set_to_source(
                                 source_incident_id,
