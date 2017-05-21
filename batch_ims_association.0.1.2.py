@@ -3,7 +3,6 @@
 import sys, getopt
 import requests
 from requests.auth import HTTPBasicAuth
-import requests_mock
 import json
 import base64
 #import grequests # Asynchronous requests. Replace 'requests' module.
@@ -193,9 +192,9 @@ def print_association_statistics(successful_associations, skipped_associations, 
     for skipped_association in skipped_associations:
         for dependent_incident_id, reasons in skipped_association.items():
             print '\n\tIncident: {0}'.format(dependent_incident_id)
-            print '\tReasons: {0}\n'.format('\n\t\t'.join(reasons))
+            print '\tReasons: {0}'.format('\n\t\t'.join(reasons))
     
-    print '> Unsuccessful updates:\n'
+    print '\n> Unsuccessful updates:\n'
     for unsuccessful_update in unsuccessful_updates:
         for dependent_incident_id, reason in unsuccessful_update:
             print '\n\tIncident: {0}'.format(dependent_incident_id)
@@ -234,15 +233,6 @@ if __name__ == "__main__":
         print 'Execution aborted.'
         sys.exit(1)
         
-    #
-    with requests_mock.Mocker() as m:
-        incident_id = 'IM9876543'
-        url = '{0}/incidents?IncidentID={1}&view=expand'.format(rest_api_prefix, incident_id)
-        m.get(url, text="{ 'BriefDescription': 'server service data_center' }")
-        print requests.get(url).text
-    
-    sys.exit(0)
-    
     dependent_incidents_ids = list(set(dependent_incidents_ids)) # remove repeated incidents
     association_statistics = associate_incident_set_to_source(
                                 source_incident_id,
