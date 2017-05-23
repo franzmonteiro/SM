@@ -71,11 +71,22 @@ def make_http_request(url, content=None, http_method='GET', request_timeout=1):
     
 def is_association_allowed(source_incident, dependent_incident):
     forbidden_services = ['swap', 'disk_usage'] # Dependent incidents with these services cannot be associated.
+    forbidden_status = ['closed', 'pending im']
     dependent_incident_service = dependent_incident['BriefDescription'].split()[1] #TODO: Use split() ?
     is_allowed = True
     why_not = [] # Reasons why the association is not allowed.
     
-    if dependent_incident_service in forbidden_services:
+    if source_incident['IMTicketStatus'].lower() in forbidden_status:
+        is_allowed = False
+        why_not.append('{0} status: {1}.'
+                       .format(source_incident['IncidentID'], source_incident['IMTicketStatus']))
+    
+    if dependent_incident['IMTicketStatus'].lower() in forbidden_status:
+        is_allowed = False
+        why_not.append('{0} status: {1}.'
+                       .format(dependent_incident['IncidentID'], dependent_incident['IMTicketStatus']))
+    
+    if dependent_incident_service.lower() in forbidden_services:
         is_allowed = False
         why_not.append('{0} is about {1}.'
                        .format(dependent_incident['IncidentID'], dependent_incident_service))
@@ -107,12 +118,11 @@ def get_incident_details(incident_id):
         return json.loads(result['response'].text)['content'][0]['Incident']
     return None
 
-def update_incident_status(incident_id, new_status):
+def update_incident_status(incident_id, new_status, action):
     url = '{0}/incidents/{1}/action/update'.format(rest_api_prefix, incident_id)
     incident_update = { 'Incident': {
-                            'AssigneeName': user,
                             'IMTicketStatus': new_status,
-                            'update.action': incident_id
+                            'update.action': action
                         }
                       }
     result = make_http_request(url, content=incident_update, http_method='POST')
@@ -138,6 +148,8 @@ def associate_incident_set_to_source(source_incident_id, dependent_incidents_ids
     unsuccessful_updates = []
     pending_status = 'Pending IM'
     reasons_why_skipped = []
+    dependent_incidents_ids = list(set(dependent_incidents_ids)) # remove repeated incidents
+    
     source_incident = get_incident_details(source_incident_id)
     if source_incident is None:
         print 'Error while getting source incident ({0}).'.format(source_incident_id)
@@ -167,7 +179,7 @@ def associate_incident_set_to_source(source_incident_id, dependent_incidents_ids
                 continue
             successful_associations.append(dependent_incident_id)
             
-            response = update_incident_status(dependent_incident_id, pending_status)
+            response = update_incident_status(dependent_incident_id, pending_status, source_incident_id)
             if response is not True:
                 error_message = ('{0} was associated with {1}, however it was not possible to update its status to {2}.'
                                  .format(dependent_incident_id, source_incident_id, pending_status))
@@ -188,19 +200,22 @@ def print_association_statistics(successful_associations, skipped_associations, 
     print '> Total unsuccessful status updates: {0}.'.format(len(unsuccessful_updates))
     print '> Total successful associations: {0}.'.format(len(successful_associations))
     
-    print '> Skipped associations:'
+    if len(skipped_associations) > 0:
+        print '> Skipped associations:'
     for skipped_association in skipped_associations:
         for dependent_incident_id, reasons in skipped_association.items():
             print '\n\tIncident: {0}'.format(dependent_incident_id)
             print '\tReasons: {0}'.format('\n\t\t'.join(reasons))
     
-    print '\n> Unsuccessful updates:\n'
+    if len(unsuccessful_updates) > 0:
+        print '\n> Unsuccessful updates:\n'
     for unsuccessful_update in unsuccessful_updates:
         for dependent_incident_id, reason in unsuccessful_update:
             print '\n\tIncident: {0}'.format(dependent_incident_id)
             print '\tReason: \n\t\t{0}\n'.format(reason)
     
-    print '> Successful associations:\n'
+    if len(successful_associations) > 0:
+        print '> Successful associations:\n'
     for successful_association in successful_associations:
         print '\t{0}'.format(successful_association)
 
@@ -232,8 +247,7 @@ if __name__ == "__main__":
     if set_configurations(configurations_file) is False:
         print 'Execution aborted.'
         sys.exit(1)
-        
-    dependent_incidents_ids = list(set(dependent_incidents_ids)) # remove repeated incidents
+    
     association_statistics = associate_incident_set_to_source(
                                 source_incident_id,
                                 dependent_incidents_ids)
